@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import styled from 'styled-components';
+import styled, { css } from 'styled-components';
 import axios from 'axios';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
@@ -31,6 +31,13 @@ interface SavedWork {
   audioData?: string;
 }
 
+// Додаємо інтерфейс для анотацій
+interface Annotation {
+  type: string;
+  html: string;
+  position: number;
+}
+
 const Container = styled.div`
   max-width: 800px;
   margin: 0 auto;
@@ -43,21 +50,101 @@ const AudioPlayer = styled.audio`
 `;
 
 const TextEditor = styled.div`
-  border: 1px solid #ccc;
-  padding: 20px;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
   min-height: 200px;
-  margin: 20px 0;
+  margin: 1rem 0;
+  line-height: 1.6;
+  font-size: 1.1rem;
   white-space: pre-wrap;
-  background-color: white;
-  &:focus {
+  background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+  &[contenteditable="true"] {
     outline: none;
-    border-color: #4CAF50;
+    cursor: text;
+  }
+
+  &[contenteditable="true"]:focus {
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+  }
+
+  /* Стилі для анотацій */
+  [data-annotation="breathing"] {
+    color: #8884d8;
+    font-weight: 500;
+    background: rgba(136, 132, 216, 0.1);
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+  }
+
+  [data-annotation="pause"] {
+    color: #ff8042;
+    font-weight: 500;
+    background: rgba(255, 128, 66, 0.1);
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+  }
+
+  [data-annotation="emotion"] {
+    color: #ffc658;
+    font-weight: 500;
+    background: rgba(255, 198, 88, 0.1);
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+  }
+
+  [data-annotation="non_verbal"] {
+    color: #82ca9d;
+    font-weight: 500;
+    background: rgba(130, 202, 157, 0.1);
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
   }
 `;
 
 const HighlightedText = styled.span<{ $isActive: boolean; $isEdited: boolean }>`
-  background-color: ${props => props.$isActive ? (props.$isEdited ? '#ffa726' : '#ffeb3b') : 'transparent'};
-  transition: background-color 0.3s ease;
+  background-color: ${props => props.$isActive ? '#e3f2fd' : 'transparent'};
+  border-radius: 4px;
+  transition: background-color 0.3s;
+  padding: 0 2px;
+  margin: 0 1px;
+  display: inline-block;
+  
+  ${props => props.$isEdited && css`
+    border-bottom: 2px solid #4CAF50;
+  `}
+
+  /* Стилі для анотацій в режимі перегляду */
+  [data-annotation] {
+    display: inline-block;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    font-weight: 500;
+    margin: 0 2px;
+  }
+
+  [data-annotation="breathing"] {
+    color: #8884d8;
+    background: rgba(136, 132, 216, 0.1);
+  }
+
+  [data-annotation="pause"] {
+    color: #ff8042;
+    background: rgba(255, 128, 66, 0.1);
+  }
+
+  [data-annotation="emotion"] {
+    color: #ffc658;
+    background: rgba(255, 198, 88, 0.1);
+  }
+
+  [data-annotation="non_verbal"] {
+    color: #82ca9d;
+    background: rgba(130, 202, 157, 0.1);
+  }
 `;
 
 const ErrorMessage = styled.div`
@@ -110,8 +197,46 @@ const Button = styled.button`
 
 const ButtonGroup = styled.div`
   display: flex;
-  gap: 10px;
-  margin: 10px 0;
+  gap: 1rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+`;
+
+const AnnotationButtonGroup = styled(ButtonGroup)`
+  background: #f5f5f5;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+`;
+
+const AnnotationButton = styled.button<{ color: string }>`
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  background-color: ${props => props.color};
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover {
+    transform: translateY(-2px);
+    opacity: 0.9;
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
 `;
 
 const FileInput = styled.input`
@@ -164,10 +289,6 @@ const HistoryTitle = styled.h3`
 const HistoryDate = styled.span`
   color: #666;
   font-size: 0.9em;
-`;
-
-const HistoryButtonContainer = styled.div`
-  margin: 20px 0;
 `;
 
 function App() {
@@ -472,122 +593,9 @@ function App() {
     }
   };
 
-  const handleSave = () => {
-    if (editorRef.current) {
-      const newText = editorRef.current.innerText;
-      setEditedText(newText);
-      
-      // Створюємо нові сегменти
-      const newSegments = [];
-      let lastEnd = 0;
-      
-      // Розділяємо текст на речення
-      const sentences = newText.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
-      console.log('Розділені речення:', sentences);
-      
-      // Додаємо оригінальні сегменти
-      for (let i = 0; i < segments.length; i++) {
-        const segment = segments[i];
-        console.log('Оригінальний сегмент:', {
-          id: segment.id,
-          text: segment.text,
-          start: segment.start,
-          end: segment.end,
-          confidence: segment.confidence,
-          words: segment.words?.length || 0
-        });
-        
-        const segmentText = segment.text;
-        const segmentStart = newText.indexOf(segmentText, lastEnd);
-        
-        if (segmentStart !== -1) {
-          // Якщо є текст перед оригінальним сегментом
-          if (segmentStart > lastEnd) {
-            const editedText = newText.substring(lastEnd, segmentStart);
-            console.log('Відредагований текст між сегментами:', editedText);
-            
-            // Знаходимо речення, які входять в цей відрізок
-            const editedSentences = sentences.filter(s => 
-              editedText.includes(s.trim()) && 
-              newText.indexOf(s) >= lastEnd && 
-              newText.indexOf(s) < segmentStart
-            );
-            console.log('Знайдені речення для відрізка:', editedSentences);
-            
-            // Створюємо сегменти для кожного речення
-            editedSentences.forEach((sentence, index) => {
-              // Використовуємо таймінги поточного сегмента
-              const newSegment = {
-                id: `edited_${i}_${index}`,
-                text: sentence.trim(),
-                start: segment.start - 10, // Починаємо за 10 секунд до поточного сегмента
-                end: segment.start - 5, // Закінчуємо за 5 секунд до поточного сегмента
-                confidence: segment.confidence || 0.5, // Використовуємо впевненість з оригінального сегмента
-                isEdited: true,
-                originalSegmentId: segment.id // Додаємо посилання на оригінальний сегмент
-              };
-              console.log('Створений новий сегмент:', newSegment);
-              newSegments.push(newSegment);
-            });
-          }
-          
-          // Додаємо оригінальний сегмент
-          newSegments.push({
-            ...segment,
-            isEdited: false
-          });
-          
-          lastEnd = segmentStart + segmentText.length;
-        }
-      }
-      
-      // Додаємо залишок тексту після останнього оригінального сегмента
-      if (lastEnd < newText.length) {
-        const remainingText = newText.substring(lastEnd);
-        console.log('Залишок тексту:', remainingText);
-        
-        const remainingSentences = sentences.filter(s => 
-          remainingText.includes(s.trim()) && 
-          newText.indexOf(s) >= lastEnd
-        );
-        console.log('Речення в залишку:', remainingSentences);
-        
-        const lastSegment = segments[segments.length - 1];
-        
-        remainingSentences.forEach((sentence, index) => {
-          const newSegment = {
-            id: `edited_end_${index}`,
-            text: sentence.trim(),
-            start: lastSegment.end,
-            end: lastSegment.end + 5,
-            confidence: lastSegment.confidence || 0.5, // Використовуємо впевненість з останнього сегмента
-            isEdited: true,
-            originalSegmentId: lastSegment.id // Додаємо посилання на останній оригінальний сегмент
-          };
-          console.log('Створений сегмент для залишку:', newSegment);
-          newSegments.push(newSegment);
-        });
-      }
-      
-      // Сортуємо сегменти за часом початку
-      newSegments.sort((a, b) => a.start - b.start);
-      console.log('Всі сегменти після сортування:', newSegments.map(segment => ({
-        id: segment.id,
-        text: segment.text,
-        start: segment.start,
-        end: segment.end,
-        confidence: segment.confidence,
-        isEdited: segment.isEdited,
-        originalSegmentId: segment.originalSegmentId
-      })));
-      
-      setEditedSegments(newSegments);
-    }
-    setIsEditing(false);
-  };
-
   const handleEditorChange = (event: React.FormEvent<HTMLDivElement>) => {
-    const newText = event.currentTarget.innerText;
+    // Зберігаємо HTML-розмітку замість простого тексту
+    const newText = event.currentTarget.innerHTML;
     setEditedText(newText);
     
     // Зберігаємо позицію курсора
@@ -607,6 +615,50 @@ function App() {
           selection.addRange(newRange);
         }
       });
+    }
+  };
+
+  const handleSave = () => {
+    if (editorRef.current) {
+      const newText = editorRef.current.innerHTML;
+      setEditedText(newText);
+      setIsEditing(false);
+
+      // Парсимо HTML-контент у масив елементів (слова та анотації)
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = newText;
+      const elements: string[] = [];
+      tempDiv.childNodes.forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          // Додаємо кожне слово окремо
+          const words = (node.textContent || '').split(/(\s+)/).filter(Boolean);
+          elements.push(...words);
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          elements.push((node as HTMLElement).outerHTML);
+        }
+      });
+
+      // Розбиваємо елементи по сегментах
+      let pointer = 0;
+      const updatedSegments = segments.map((segment) => {
+        const segmentWords = segment.text.split(/(\s+)/).filter(Boolean);
+        const segmentLength = segmentWords.length;
+        let htmlContent = '';
+        let count = 0;
+        while (pointer < elements.length && count < segmentLength) {
+          htmlContent += elements[pointer];
+          // Рахуємо тільки слова, а не розмітку
+          if (!elements[pointer].startsWith('<')) count++;
+          pointer++;
+        }
+        return {
+          ...segment,
+          htmlContent,
+          isEdited: true
+        };
+      });
+
+      setEditedSegments(updatedSegments);
     }
   };
 
@@ -769,7 +821,7 @@ function App() {
       const startTime = new Date(segment.start * 1000).toISOString().substr(11, 12);
       const endTime = new Date(segment.end * 1000).toISOString().substr(11, 12);
       
-      // Додаємо розмітку
+      // Додаємо розмітку часу
       corpusText += `[${startTime} --> ${endTime}] `;
       
       // Перевіряємо наявність та валідність значення confidence
@@ -778,10 +830,59 @@ function App() {
         : 'невідомо';
       corpusText += `[впевненість: ${confidence}%] `;
       
+      // Додаємо мітку про редагування
       if (segment.isEdited) {
         corpusText += '[відредаговано] ';
       }
-      corpusText += `${segment.text}\n`;
+
+      // Отримуємо текст з анотаціями
+      if (segment.isEdited && segment.htmlContent) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = segment.htmlContent;
+        
+        // Збираємо всі елементи в порядку їх появи
+        const elements: Array<{type: 'text' | 'annotation', content: string}> = [];
+        const walker = document.createTreeWalker(
+          tempDiv,
+          NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+          null
+        );
+
+        let node: Node | null;
+        while ((node = walker.nextNode()) !== null) {
+          if (node.nodeType === Node.TEXT_NODE) {
+            const text = node.textContent?.trim() || '';
+            if (text) {
+              elements.push({ type: 'text', content: text });
+            }
+          } else if (
+            node.nodeType === Node.ELEMENT_NODE && 
+            (node as Element).hasAttribute('data-annotation')
+          ) {
+            const type = (node as Element).getAttribute('data-annotation');
+            let content = '';
+            switch (type) {
+              case 'breathing':
+                content = '[ДИХАННЯ]';
+                break;
+              case 'pause':
+                content = '[ПАУЗА]';
+                break;
+              case 'emotion':
+                content = '[ЕМОЦІЯ]';
+                break;
+              case 'non_verbal':
+                content = '[НЕВЕРБАЛЬНИЙ ЗВУК]';
+                break;
+            }
+            elements.push({ type: 'annotation', content });
+          }
+        }
+        
+        corpusText += elements.map(el => el.content).join(' ').trim() + '\n';
+      } else {
+        corpusText += segment.text.trim() + '\n';
+      }
     });
     
     // Створюємо Blob з текстом
@@ -802,6 +903,53 @@ function App() {
     // Видаляємо посилання і очищаємо URL
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleAnnotationInsert = (annotationType: string) => {
+    if (editorRef.current) {
+      const selection = window.getSelection();
+      const range = selection?.getRangeAt(0);
+      
+      let annotationText = '';
+      switch (annotationType) {
+        case 'breathing':
+          annotationText = '[ДИХАННЯ]';
+          break;
+        case 'pause':
+          annotationText = '[ПАУЗА]';
+          break;
+        case 'emotion':
+          annotationText = '[ЕМОЦІЯ]';
+          break;
+        case 'non_verbal':
+          annotationText = '[НЕВЕРБАЛЬНИЙ ЗВУК]';
+          break;
+      }
+
+      if (range) {
+        const span = document.createElement('span');
+        span.setAttribute('data-annotation', annotationType);
+        span.textContent = annotationText;
+        
+        range.deleteContents();
+        range.insertNode(span);
+        
+        // Встановлюємо курсор після вставленої анотації
+        range.setStartAfter(span);
+        range.setEndAfter(span);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        
+        // Додаємо пробіл після анотації
+        const space = document.createTextNode(' ');
+        range.insertNode(space);
+        range.setStartAfter(space);
+        range.setEndAfter(space);
+        
+        // Оновлюємо текст
+        handleEditorChange({ currentTarget: editorRef.current } as React.FormEvent<HTMLDivElement>);
+      }
+    }
   };
 
   return (
@@ -855,8 +1003,39 @@ function App() {
               </HistoryContainer>
             )}
 
-            {transcribedText && (
+            {transcribedText && !showHistory && (
               <>
+                <AnnotationButtonGroup>
+                  <AnnotationButton
+                    color="#8884d8"
+                    onClick={() => handleAnnotationInsert('breathing')}
+                    disabled={!isEditing}
+                  >
+                    🫁 Дихання
+                  </AnnotationButton>
+                  <AnnotationButton
+                    color="#ff8042"
+                    onClick={() => handleAnnotationInsert('pause')}
+                    disabled={!isEditing}
+                  >
+                    ⏸️ Пауза
+                  </AnnotationButton>
+                  <AnnotationButton
+                    color="#ffc658"
+                    onClick={() => handleAnnotationInsert('emotion')}
+                    disabled={!isEditing}
+                  >
+                    😊 Емоція
+                  </AnnotationButton>
+                  <AnnotationButton
+                    color="#82ca9d"
+                    onClick={() => handleAnnotationInsert('non_verbal')}
+                    disabled={!isEditing}
+                  >
+                    🔊 Невербальний звук
+                  </AnnotationButton>
+                </AnnotationButtonGroup>
+
                 <ButtonGroup>
                   {!isEditing ? (
                     <>
@@ -872,48 +1051,35 @@ function App() {
                     </>
                   )}
                 </ButtonGroup>
-
-                {isEditing ? (
-                  <TextEditor
-                    ref={editorRef}
-                    contentEditable
-                    onInput={handleEditorChange}
-                    suppressContentEditableWarning
-                    dangerouslySetInnerHTML={{ __html: editedText }}
-                  />
-                ) : (
-                  <TextEditor>
-                    {editedSegments.map((segment, index) => {
-                      const originalSegment = segments.find(s => s.id === segment.originalSegmentId);
-                      const prevOriginalSegment = segments.find(s => s.id === editedSegments[index - 1]?.originalSegmentId);
-                      const nextOriginalSegment = segments.find(s => s.id === editedSegments[index + 1]?.originalSegmentId);
-                      
-                      const shouldHighlight = segment.isEdited && originalSegment && (
-                        index === 0 ? (
-                          currentTime >= segment.start && 
-                          currentTime <= segment.end + 3
-                        ) : (
-                          currentTime >= segment.start && 
-                          currentTime <= segment.end + 3
-                        )
-                      );
-
-                      return (
-                        <HighlightedText
-                          key={segment.id || index}
-                          $isActive={segment.isEdited ? shouldHighlight : (currentTime >= segment.start && currentTime <= segment.end)}
-                          $isEdited={segment.isEdited}
-                          title={`Впевненість: ${(segment.confidence * 100).toFixed(1)}%`}
-                          onClick={() => handleSegmentClick(segment.start)}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          {segment.text}
-                        </HighlightedText>
-                      );
-                    })}
-                  </TextEditor>
-                )}
               </>
+            )}
+
+            {isEditing ? (
+              <TextEditor
+                ref={editorRef}
+                contentEditable
+                onInput={handleEditorChange}
+                suppressContentEditableWarning
+                dangerouslySetInnerHTML={{ __html: editedText }}
+              />
+            ) : (
+              <TextEditor>
+                {editedSegments.map((segment, index) => {
+                  const shouldHighlight = currentTime >= segment.start && currentTime <= segment.end + 3;
+                  return (
+                    <HighlightedText
+                      key={segment.id || index}
+                      $isActive={shouldHighlight}
+                      $isEdited={segment.isEdited}
+                      title={`Впевненість: ${(segment.confidence * 100).toFixed(1)}%`}
+                      onClick={() => handleSegmentClick(segment.start)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <span dangerouslySetInnerHTML={{ __html: segment.htmlContent || segment.text }} />
+                    </HighlightedText>
+                  );
+                })}
+              </TextEditor>
             )}
           </Container>
         } />
@@ -922,4 +1088,5 @@ function App() {
   );
 }
 
-export default App; 
+export default App;
+
