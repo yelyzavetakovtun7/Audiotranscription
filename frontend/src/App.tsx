@@ -60,6 +60,8 @@ const TextEditor = styled.div`
   white-space: pre-wrap;
   background: white;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 2;
 
   &[contenteditable="true"] {
     outline: none;
@@ -71,6 +73,15 @@ const TextEditor = styled.div`
     box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
   }
 
+  /* Стилі для підсвітки активного сегменту */
+  .highlight-active {
+    background-color: #e3f2fd !important;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+    padding: 0 2px;
+    margin: 0 1px;
+  }
+
   /* Стилі для анотацій */
   [data-annotation="breathing"] {
     color: #8884d8;
@@ -78,6 +89,9 @@ const TextEditor = styled.div`
     background: rgba(136, 132, 216, 0.1);
     padding: 0.1rem 0.3rem;
     border-radius: 4px;
+    display: inline-block;
+    position: relative;
+    z-index: 3;
   }
 
   [data-annotation="pause"] {
@@ -86,6 +100,9 @@ const TextEditor = styled.div`
     background: rgba(255, 128, 66, 0.1);
     padding: 0.1rem 0.3rem;
     border-radius: 4px;
+    display: inline-block;
+    position: relative;
+    z-index: 3;
   }
 
   [data-annotation="emotion"] {
@@ -94,6 +111,9 @@ const TextEditor = styled.div`
     background: rgba(255, 198, 88, 0.1);
     padding: 0.1rem 0.3rem;
     border-radius: 4px;
+    display: inline-block;
+    position: relative;
+    z-index: 3;
   }
 
   [data-annotation="non_verbal"] {
@@ -102,6 +122,9 @@ const TextEditor = styled.div`
     background: rgba(130, 202, 157, 0.1);
     padding: 0.1rem 0.3rem;
     border-radius: 4px;
+    display: inline-block;
+    position: relative;
+    z-index: 3;
   }
 `;
 
@@ -203,10 +226,24 @@ const ButtonGroup = styled.div`
 `;
 
 const AnnotationButtonGroup = styled(ButtonGroup)`
-  background: #f5f5f5;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: rgba(245, 245, 245, 0.95);
+  backdrop-filter: blur(10px);
   padding: 1rem;
-  border-radius: 8px;
-  margin-bottom: 1rem;
+  border-radius: 8px 8px 0 0;
+  margin: 0;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: center;
+
+  /* Додаємо відступ знизу для контенту, щоб він не ховався за кнопками */
+  & + * {
+    margin-bottom: 100px;
+  }
 `;
 
 const AnnotationButton = styled.button<{ color: string }>`
@@ -289,6 +326,43 @@ const HistoryTitle = styled.h3`
 const HistoryDate = styled.span`
   color: #666;
   font-size: 0.9em;
+`;
+
+const TopBar = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 1001;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  padding: 16px 0 8px 0;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  /* Для плавності на мобільних */
+  @media (max-width: 600px) {
+    padding: 8px 0 4px 0;
+    margin-bottom: 12px;
+  }
+`;
+
+const HeaderBar = styled.div`
+  background: #fff;
+  padding: 12px 0 8px 0;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+
+  @media (max-width: 600px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 0 4px 0;
+    margin-bottom: 4px;
+  }
 `;
 
 function App() {
@@ -593,40 +667,140 @@ function App() {
     }
   };
 
+  // Додаємо функцію для визначення активного сегмента
+  const isSegmentActive = (segment: any, currentTime: number) => {
+    // Додаємо невелику затримку перед початком наступного сегмента
+    const SEGMENT_OVERLAP = 0.1;
+    return currentTime >= segment.start && currentTime < segment.end + SEGMENT_OVERLAP;
+  };
+
   const handleEditorChange = (event: React.FormEvent<HTMLDivElement>) => {
-    // Зберігаємо HTML-розмітку замість простого тексту
     const newText = event.currentTarget.innerHTML;
-    setEditedText(newText);
+      setEditedText(newText);
+      
+    // Розбиваємо HTML-контент у масив елементів (слова та анотації)
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = newText;
     
-    // Зберігаємо позицію курсора
-    const selection = window.getSelection();
-    const range = selection?.getRangeAt(0);
-    const cursorPosition = range?.startOffset;
-    
-    // Відновлюємо позицію курсора
-    if (selection && range && cursorPosition !== undefined) {
-      requestAnimationFrame(() => {
-        const newRange = document.createRange();
-        const textNode = editorRef.current?.firstChild;
-        if (textNode) {
-          newRange.setStart(textNode, cursorPosition);
-          newRange.setEnd(textNode, cursorPosition);
-          selection.removeAllRanges();
-          selection.addRange(newRange);
+    // Видаляємо всі span з класом highlight-active
+    const highlightSpans = tempDiv.querySelectorAll('.highlight-active');
+    highlightSpans.forEach(span => {
+      const parent = span.parentNode;
+      if (parent) {
+        while (span.firstChild) {
+          parent.insertBefore(span.firstChild, span);
         }
-      });
+        parent.removeChild(span);
+      }
+    });
+
+    // Нормалізуємо пробіли в тексті
+    const normalizeText = (text: string) => {
+      return text.replace(/\s+/g, ' ').trim();
+    };
+
+    const elements: string[] = [];
+    tempDiv.childNodes.forEach(node => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        // Додаємо кожне слово окремо, зберігаючи пробіли
+        const text = node.textContent || '';
+        const words = text.split(/(\s+)/).filter(Boolean);
+        elements.push(...words);
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        elements.push((node as HTMLElement).outerHTML);
+      }
+    });
+
+    // Розбиваємо елементи по сегментах
+    let pointer = 0;
+    const updatedSegments = editedSegments.map(segment => {
+      const segmentText = normalizeText(segment.text);
+      const segmentWords = segmentText.split(' ');
+      const segmentLength = segmentWords.length;
+      let htmlContent = '';
+      let wordCount = 0;
+      
+      while (pointer < elements.length && wordCount < segmentLength) {
+        const element = elements[pointer];
+        htmlContent += element;
+        
+        // Рахуємо тільки слова, а не розмітку і не пробіли
+        if (!element.startsWith('<') && element.trim()) {
+          wordCount++;
+        }
+        pointer++;
+      }
+      
+      return {
+            ...segment,
+        htmlContent: htmlContent.trim(),
+        isEdited: true
+      };
+    });
+
+    setEditedSegments(updatedSegments);
+  };
+
+  // Змінюємо функцію форматування тексту
+  const formatTextWithHighlight = (text: string, isActive: boolean) => {
+    if (!isActive) return text;
+
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = text;
+
+    // Обходимо всі текстові вузли
+    const walker = document.createTreeWalker(
+      tempDiv,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+
+    const nodesToWrap: Text[] = [];
+    let currentNode: Text | null;
+    
+    // Збираємо всі текстові вузли
+    while ((currentNode = walker.nextNode() as Text | null)) {
+      if (currentNode && 
+          currentNode.nodeType === Node.TEXT_NODE && 
+          !currentNode.parentElement?.hasAttribute('data-annotation') &&
+          !currentNode.parentElement?.classList.contains('highlight-active') &&
+          currentNode.textContent?.trim()) {
+        nodesToWrap.push(currentNode);
+      }
     }
+
+    // Обгортаємо кожен текстовий вузол в span з підсвіткою
+    nodesToWrap.forEach(node => {
+      const span = document.createElement('span');
+      span.className = 'highlight-active';
+      node.parentNode?.insertBefore(span, node);
+      span.appendChild(node);
+    });
+
+    return tempDiv.innerHTML;
   };
 
   const handleSave = () => {
     if (editorRef.current) {
-      const newText = editorRef.current.innerHTML;
-      setEditedText(newText);
+      // Очищаємо текст від підсвітки
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = editorRef.current.innerHTML;
+      const highlightSpans = tempDiv.querySelectorAll('.highlight-active');
+      highlightSpans.forEach(span => {
+        const parent = span.parentNode;
+        if (parent) {
+          while (span.firstChild) {
+            parent.insertBefore(span.firstChild, span);
+          }
+          parent.removeChild(span);
+        }
+      });
+      const cleanHtml = tempDiv.innerHTML;
+
+      setEditedText(cleanHtml);
       setIsEditing(false);
 
       // Парсимо HTML-контент у масив елементів (слова та анотації)
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = newText;
       const elements: string[] = [];
       tempDiv.childNodes.forEach(node => {
         if (node.nodeType === Node.TEXT_NODE) {
@@ -786,8 +960,24 @@ function App() {
   };
 
   const handleDownloadText = () => {
+    // Очищаємо текст від підсвітки
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = editedText;
+    const highlightSpans = tempDiv.querySelectorAll('.highlight-active');
+    highlightSpans.forEach(span => {
+      const parent = span.parentNode;
+      if (parent) {
+        while (span.firstChild) {
+          parent.insertBefore(span.firstChild, span);
+        }
+        parent.removeChild(span);
+      }
+    });
+    // Беремо чистий текст
+    const plainText = tempDiv.innerText;
+
     // Створюємо Blob з текстом
-    const blob = new Blob([editedText], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([plainText], { type: 'text/plain;charset=utf-8' });
     
     // Створюємо URL для скачування
     const url = URL.createObjectURL(blob);
@@ -952,6 +1142,65 @@ function App() {
     }
   };
 
+  // Функції для збереження та відновлення позиції курсора
+  function saveSelection(containerEl: HTMLElement | null) {
+    if (!containerEl) return null;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return null;
+    const range = selection.getRangeAt(0);
+    const preSelectionRange = range.cloneRange();
+    preSelectionRange.selectNodeContents(containerEl);
+    preSelectionRange.setEnd(range.startContainer, range.startOffset);
+    const start = preSelectionRange.toString().length;
+    return { start, end: start + range.toString().length };
+  }
+
+  function restoreSelection(containerEl: HTMLElement | null, savedSel: { start: number; end: number } | null) {
+    if (!containerEl || !savedSel) return;
+    let charIndex = 0, range = document.createRange();
+    range.setStart(containerEl, 0);
+    range.collapse(true);
+    let nodeStack: Node[] = [containerEl], node: Node | undefined, foundStart = false, stop = false;
+
+    while (!stop && (node = nodeStack.pop())) {
+      if (node.nodeType === 3) {
+        const nextCharIndex = charIndex + (node.textContent?.length || 0);
+        if (!foundStart && savedSel.start >= charIndex && savedSel.start <= nextCharIndex) {
+          range.setStart(node, savedSel.start - charIndex);
+          foundStart = true;
+        }
+        if (foundStart && savedSel.end >= charIndex && savedSel.end <= nextCharIndex) {
+          range.setEnd(node, savedSel.end - charIndex);
+          stop = true;
+        }
+        charIndex = nextCharIndex;
+      } else {
+        let i = node.childNodes.length;
+        while (i--) {
+          nodeStack.push(node.childNodes[i]);
+        }
+      }
+    }
+    const sel = window.getSelection();
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }
+
+  // Додаю функцію для формування цілісного тексту з підсвіткою активного сегмента
+  const getFullTextWithHighlight = () => {
+    return editedSegments.map((segment, index) => {
+      const shouldHighlight = isSegmentActive(segment, currentTime);
+      const html = segment.htmlContent || segment.text;
+      if (shouldHighlight) {
+        // Обгортаємо весь сегмент у підсвітку
+        return `<span class="highlight-active">${html}</span>`;
+      }
+      return html;
+    }).join('');
+  };
+
   return (
     <Router>
       <Routes>
@@ -959,34 +1208,50 @@ function App() {
           <Container>
             <h1>Аудіо в текст</h1>
 
+            {/* Верхній блок з поверненням, вибором файлу та транскрибуванням */}
+            <HeaderBar>
+              {!showHistory && (
+                <BackButton onClick={handleBackToHistory}>
+                  ← Повернутися до історії
+                </BackButton>
+              )}
+              <FileInput type="file" accept="audio/*" onChange={handleFileChange} />
+              <Button onClick={handleTranscribe} disabled={isLoading || !audioFile}>
+                {isLoading ? 'Транскрибування...' : 'Транскрибувати'}
+              </Button>
+            </HeaderBar>
+
+            {/* Закріплена панель з плеєром і кнопками */}
             {!showHistory && (
-              <BackButton onClick={handleBackToHistory}>
-                ← Повернутися до історії
-              </BackButton>
+              <TopBar>
+                {audioUrl && (
+                  <AudioPlayer
+                    ref={audioRef}
+                    controls
+                    src={audioUrl}
+                    onTimeUpdate={handleTimeUpdate}
+                  />
+                )}
+                <ButtonGroup>
+                  {!isEditing ? (
+                    <>
+                      <Button onClick={handleEdit}>Редагувати</Button>
+                      <Button onClick={saveToHistory}>Зберегти в історію</Button>
+                      <DownloadButton onClick={handleDownloadText}>Скачати текст</DownloadButton>
+                      <CorpusButton onClick={handleDownloadCorpus}>Скачати з розміткою</CorpusButton>
+                    </>
+                  ) : (
+                    <>
+                      <Button onClick={handleSave}>Зберегти</Button>
+                      <Button onClick={handleReset}>Скасувати</Button>
+                    </>
+                  )}
+                </ButtonGroup>
+              </TopBar>
             )}
 
-            <FileInput type="file" accept="audio/*" onChange={handleFileChange} />
-            <Button onClick={handleTranscribe} disabled={isLoading || !audioFile}>
-              {isLoading ? 'Транскрибування...' : 'Транскрибувати'}
-            </Button>
-            
-            {error && <ErrorMessage>{error}</ErrorMessage>}
-            
-            {isLoading && (
-              <LoadingMessage>
-                <Spinner />
-                Йде обробка аудіо... {getElapsedTime()} ({progress}%)
-              </LoadingMessage>
-            )}
-            
-            {audioUrl && (
-              <AudioPlayer
-                ref={audioRef}
-                controls
-                src={audioUrl}
-                onTimeUpdate={handleTimeUpdate}
-              />
-            )}
+            {/* Додаємо відступ для основного контенту */}
+            <div style={{ marginTop: 16 }} />
 
             {showHistory && (
               <HistoryContainer>
@@ -1003,53 +1268,49 @@ function App() {
               </HistoryContainer>
             )}
 
-            {/* Кнопки керування над текстом */}
-            {!showHistory && (
-              <ButtonGroup>
-                {!isEditing ? (
-                  <>
-                    <Button onClick={handleEdit}>Редагувати</Button>
-                    <Button onClick={saveToHistory}>Зберегти в історію</Button>
-                    <DownloadButton onClick={handleDownloadText}>Скачати текст</DownloadButton>
-                    <CorpusButton onClick={handleDownloadCorpus}>Скачати з розміткою</CorpusButton>
-                  </>
-                ) : (
-                  <>
-                    <Button onClick={handleSave}>Зберегти</Button>
-                    <Button onClick={handleReset}>Скасувати</Button>
-                  </>
-                )}
-              </ButtonGroup>
-            )}
-
             {/* Відображення тексту тільки якщо не showHistory */}
             {!showHistory && (
               isEditing ? (
-                <TextEditor
-                  ref={editorRef}
-                  contentEditable
-                  onInput={handleEditorChange}
-                  suppressContentEditableWarning
-                  dangerouslySetInnerHTML={{ __html: editedText }}
-                />
-              ) : (
-                <TextEditor>
-                  {editedSegments.map((segment, index) => {
-                    const shouldHighlight = currentTime >= segment.start && currentTime <= segment.end + 3;
-                    return (
-                      <HighlightedText
-                        key={segment.id || index}
-                        $isActive={shouldHighlight}
-                        $isEdited={segment.isEdited}
-                        title={`Впевненість: ${(segment.confidence * 100).toFixed(1)}%`}
-                        onClick={() => handleSegmentClick(segment.start)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <span dangerouslySetInnerHTML={{ __html: segment.htmlContent || segment.text }} />
-                      </HighlightedText>
-                    );
-                  })}
-                </TextEditor>
+                (() => {
+                  // Зберігаємо позицію курсора перед ререндером
+                  const savedSel = saveSelection(editorRef.current);
+                  // Формуємо HTML з підсвіткою
+                  const html = editedSegments.map((segment, index) => {
+                    const shouldHighlight = isSegmentActive(segment, currentTime);
+                    // Спочатку видаляємо всі існуючі підсвітки з сегмента
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = segment.htmlContent || segment.text;
+                    const highlightSpans = tempDiv.querySelectorAll('.highlight-active');
+                    highlightSpans.forEach(span => {
+                      const parent = span.parentNode;
+                      if (parent) {
+                        while (span.firstChild) {
+                          parent.insertBefore(span.firstChild, span);
+                        }
+                        parent.removeChild(span);
+                      }
+                    });
+                    // Потім додаємо нову підсвітку якщо потрібно
+                    return formatTextWithHighlight(tempDiv.innerHTML, shouldHighlight);
+                  }).join(' ');
+                  // Відновлюємо позицію курсора після ререндеру
+                  setTimeout(() => restoreSelection(editorRef.current, savedSel), 0);
+                  return (
+                  <TextEditor
+                    ref={editorRef}
+                    contentEditable
+                    onInput={handleEditorChange}
+                    suppressContentEditableWarning
+                      dangerouslySetInnerHTML={{ __html: html }}
+                  />
+                  );
+                })()
+                ) : (
+                  <TextEditor
+                    as="div"
+                    contentEditable={false}
+                    dangerouslySetInnerHTML={{ __html: getFullTextWithHighlight() }}
+                  />
               )
             )}
 
@@ -1093,5 +1354,5 @@ function App() {
   );
 }
 
-export default App;
+export default App; 
 
