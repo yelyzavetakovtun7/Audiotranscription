@@ -1,0 +1,63 @@
+@startuml Corpus Markup System
+
+package "Corpus Markup" {
+    [Markup Manager]<<Core>> as MM {
+        [Timeline Controller] as TC
+        [Annotation Storage] as AS
+        [Export Module] as EM
+    }
+
+    package "Annotation Types" {
+        [Breathing Markup]<<Annotation>> as BM {
+            [Inhale Detector] as ID
+            [Exhale Detector] as ED
+            [Breathing Pattern Analyzer] as BPA
+        }
+
+        [Non-verbal Sounds]<<Annotation>> as NVS {
+            [Sound Classifier] as SC
+            [Sound Pattern Detector] as SPD
+            [Background Noise Filter] as BNF
+        }
+
+        [Emotions]<<Annotation>> as EM {
+            [Emotion Detector] as EMD
+            [Intensity Analyzer] as IA
+            [Context Analyzer] as CA
+        }
+
+        [Pauses]<<Annotation>> as PM {
+            [Silence Detector] as SD
+            [Pause Classifier] as PC
+            [Duration Analyzer] as DA
+        }
+    }
+
+    package "Visualization" {
+        [Timeline View]<<UI>> as TV
+        [Annotation Editor]<<UI>> as AE
+        [Layer Manager]<<UI>> as LM
+        [Export Interface]<<UI>> as EI
+    }
+}
+
+' Взаємодії
+MM --> BM : "керує"
+MM --> NVS : "керує"
+MM --> EM : "керує"
+MM --> PM : "керує"
+
+TC --> TV : "синхронізує"
+AS --> AE : "надає дані"
+AS --> LM : "керує шарами"
+
+' Анотації
+BM --> AS : "зберігає"
+NVS --> AS : "зберігає"
+EM --> AS : "зберігає"
+PM --> AS : "зберігає"
+
+' Експорт
+EM --> EI : "надає формати"
+
+@enduml 
