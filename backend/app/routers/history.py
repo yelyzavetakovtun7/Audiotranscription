@@ -8,6 +8,13 @@ import logging
 import shutil
 from fastapi.responses import FileResponse
 from pathlib import Path
+from ..db import (
+    get_all_transcriptions,
+    get_transcription_by_id,
+    create_transcription,
+    delete_transcription,
+    Transcription
+)
 
 # Налаштування логування
 logging.basicConfig(level=logging.INFO)
@@ -18,11 +25,9 @@ router = APIRouter(prefix="/history", tags=["history"])
 # Створюємо директорію для зберігання аудіофайлів
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 AUDIO_DIR = BASE_DIR / "audio_files"
-HISTORY_FILE = BASE_DIR / "transcription_history.json"
 
 logger.info(f"Base directory: {BASE_DIR}")
 logger.info(f"Audio directory: {AUDIO_DIR}")
-logger.info(f"History file: {HISTORY_FILE}")
 
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
@@ -35,32 +40,22 @@ class SavedWork(BaseModel):
     segments: List[dict]
     editedSegments: List[dict]
 
-def load_history():
-    try:
-        if HISTORY_FILE.exists():
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                history = json.load(f)
-                logger.info(f"Loaded {len(history)} items from history")
-                return history
-        logger.info("History file not found, creating new one")
-        return []
-    except Exception as e:
-        logger.error(f"Error loading history: {str(e)}")
-        return []
-
-def save_history(history):
-    try:
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-            logger.info(f"Saved {len(history)} items to history")
-    except Exception as e:
-        logger.error(f"Error saving history: {str(e)}")
-
 @router.get("/")
 async def get_history():
     try:
-        history = load_history()
-        return history
+        transcriptions = await get_all_transcriptions()
+        return [
+            {
+                "id": str(t.id),
+                "fileName": t.filename,
+                "date": t.created_at.isoformat(),
+                "transcribedText": t.text,
+                "editedText": t.text,  # Використовуємо той самий текст
+                "segments": t.segments,
+                "editedSegments": t.segments  # Використовуємо ті самі сегменти
+            }
+            for t in transcriptions
+        ]
     except Exception as e:
         logger.error(f"Error in get_history: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -103,12 +98,10 @@ async def save_to_history(
         if file_size == 0:
             raise Exception("Saved file is empty")
         
-        # Зберігаємо метадані
-        history = load_history()
-        history.append(work_data)
-        save_history(history)
+        # Зберігаємо в "БД"
+        transcription = await create_transcription(work_data)
         
-        return {"message": "Work saved successfully"}
+        return {"message": "Work saved successfully", "id": transcription.id}
     except Exception as e:
         logger.error(f"Error in save_to_history: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -117,17 +110,13 @@ async def save_to_history(
 async def get_audio(work_id: str):
     try:
         logger.info(f"Getting audio for work ID: {work_id}")
-        history = load_history()
-        logger.info(f"Loaded history: {history}")
+        transcription = await get_transcription_by_id(int(work_id))
         
-        work = next((w for w in history if w["id"] == work_id), None)
-        logger.info(f"Found work: {work}")
-        
-        if not work:
+        if not transcription:
             logger.error(f"Work not found: {work_id}")
             raise HTTPException(status_code=404, detail="Work not found")
         
-        file_path = AUDIO_DIR / f"{work_id}_{work['fileName']}"
+        file_path = AUDIO_DIR / f"{work_id}_{transcription.filename}"
         logger.info(f"Looking for audio file at: {file_path}")
         
         if not file_path.exists():
@@ -146,7 +135,7 @@ async def get_audio(work_id: str):
         return FileResponse(
             file_path,
             media_type="audio/mpeg",
-            filename=work['fileName']
+            filename=transcription.filename
         )
     except Exception as e:
         logger.error(f"Error in get_audio: {str(e)}")
@@ -156,22 +145,22 @@ async def get_audio(work_id: str):
 async def delete_from_history(work_id: str):
     try:
         logger.info(f"Deleting work with ID: {work_id}")
-        history = load_history()
-        work = next((w for w in history if w["id"] == work_id), None)
+        transcription = await get_transcription_by_id(int(work_id))
         
-        if not work:
+        if not transcription:
             logger.error(f"Work not found: {work_id}")
             raise HTTPException(status_code=404, detail="Work not found")
         
         # Видаляємо аудіофайл
-        file_path = AUDIO_DIR / f"{work_id}_{work['fileName']}"
+        file_path = AUDIO_DIR / f"{work_id}_{transcription.filename}"
         if file_path.exists():
             logger.info(f"Deleting audio file: {file_path}")
             os.remove(file_path)
         
-        # Видаляємо з історії
-        history = [w for w in history if w["id"] != work_id]
-        save_history(history)
+        # Видаляємо з "БД"
+        success = await delete_transcription(int(work_id))
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete from database")
         
         return {"message": "Work deleted successfully"}
     except Exception as e:

@@ -13,8 +13,9 @@ import time
 import asyncio
 from typing import Set
 from app.routers import history
+from app.db import init_db, AsyncSessionLocal, Transcription, create_transcription
 
-# Настройка логирования
+# Налаштування логування
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -23,13 +24,13 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Подключаем роутер истории
+# Підключаємо роутер історії
 app.include_router(history.router)
 
-# Хранилище активных WebSocket соединений
+# Сховище активних WebSocket з'єднань
 active_connections: Set[WebSocket] = set()
 
-# Настройка CORS
+# Налаштування CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -73,7 +74,7 @@ async def websocket_endpoint(websocket: WebSocket):
             logger.info(f"З'єднання закрито. Залишилось активних: {len(active_connections)}")
 
 async def broadcast_progress(progress: int):
-    """Отправляет прогресс всем подключенным клиентам"""
+    """Відправляє прогрес всім підключеним клієнтам"""
     logger.info(f"Відправляємо прогрес: {progress}%")
     disconnected = set()
     for connection in active_connections:
@@ -96,6 +97,8 @@ async def startup_event():
         global model
         model = whisper.load_model("base")
         logger.info("Модель Whisper успішно завантажена")
+        await init_db()  # створення таблиць у БД
+        logger.info("Базу даних ініціалізовано")
     except Exception as e:
         logger.error(f"Помилка при завантаженні моделі Whisper: {str(e)}")
         raise
@@ -117,7 +120,7 @@ class TranscriptionResponse(BaseModel):
     segments: List[Dict[str, Any]]
 
 def get_duration(audio_path: str) -> float:
-    """Получить длительность аудио файла в секундах"""
+    """Отримати тривалість аудіо файлу в секундах"""
     import subprocess
     try:
         cmd = ['ffprobe', '-i', audio_path, '-show_entries', 'format=duration', '-v', 'quiet', '-of', 'csv=p=0']
@@ -128,38 +131,38 @@ def get_duration(audio_path: str) -> float:
 
 @app.post("/transcribe", response_model=TranscriptionResponse)
 async def transcribe_audio(file: UploadFile = File(...)):
-    logger.info(f"Получен файл: {file.filename}, тип: {file.content_type}")
+    logger.info(f"Отримано файл: {file.filename}, тип: {file.content_type}")
     
-    # Проверяем формат файла
+    # Перевіряємо формат файлу
     if not file.content_type.startswith('audio/'):
-        logger.error(f"Неверный формат файла: {file.content_type}")
-        raise HTTPException(status_code=400, detail="Файл должен быть аудио")
+        logger.error(f"Невірний формат файлу: {file.content_type}")
+        raise HTTPException(status_code=400, detail="Файл повинен бути аудіо")
 
-    # Создаем временный файл для аудио
+    # Створюємо тимчасовий файл для аудіо
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
         temp_file_path = temp_file.name
         try:
-            logger.info("Чтение содержимого файла...")
+            logger.info("Читання вмісту файлу...")
             content = await file.read()
             temp_file.write(content)
-            logger.info(f"Файл сохранен во временное хранилище: {temp_file_path}")
+            logger.info(f"Файл збережено у тимчасове сховище: {temp_file_path}")
 
-            # Получаем длительность аудио
+            # Отримуємо тривалість аудіо
             duration = get_duration(temp_file_path)
-            logger.info(f"Длительность аудио: {duration:.2f} секунд")
+            logger.info(f"Тривалість аудіо: {duration:.2f} секунд")
 
-            # Транскрибируем аудио
-            logger.info("Начало транскрибации...")
+            # Транскрибуємо аудіо
+            logger.info("Початок транскрибування...")
             start_time = time.time()
 
-            # Отправляем начальный прогресс
+            # Відправляємо початковий прогрес
             await broadcast_progress(0)
 
-            # Запускаем задачу для обновления прогресса
+            # Запускаємо задачу для оновлення прогресу
             async def update_progress():
                 while True:
                     elapsed = time.time() - start_time
-                    # Предполагаем, что транскрибация займет примерно 2x длительность аудио
+                    # Припускаємо, що транскрибування займе приблизно 2x тривалість аудіо
                     estimated_duration = duration * 2
                     progress = min(int((elapsed / estimated_duration) * 100), 99)
                     await broadcast_progress(progress)
@@ -167,39 +170,52 @@ async def transcribe_audio(file: UploadFile = File(...)):
                         break
                     await asyncio.sleep(0.1)
 
-            # Запускаем обновление прогресса в фоновом режиме
+            # Запускаємо оновлення прогресу у фоновому режимі
             progress_task = asyncio.create_task(update_progress())
 
-            # Выполняем транскрибацию
+            # Виконуємо транскрибування
             result = model.transcribe(
                 temp_file_path,
-                language="uk",  # Указываем украинский язык
+                language="uk",  # Вказуємо українську мову
                 verbose=False
             )
 
-            # Отменяем задачу обновления прогресса
+            # Скасовуємо задачу оновлення прогресу
             progress_task.cancel()
             try:
                 await progress_task
             except asyncio.CancelledError:
                 pass
 
-            # Отправляем финальный прогресс
+            # Відправляємо фінальний прогрес
             await broadcast_progress(100)
             
-            logger.info("Транскрибация успешно завершена")
+            logger.info("Транскрибування успішно завершено")
+
+            # Зберігаємо результат в "БД"
+            transcription_data = {
+                "id": str(int(time.time())),  # Використовуємо timestamp як ID
+                "fileName": file.filename,
+                "date": datetime.utcnow().isoformat(),
+                "transcribedText": result["text"],
+                "editedText": result["text"],
+                "segments": result["segments"],
+                "editedSegments": result["segments"]
+            }
+            await create_transcription(transcription_data)
+
             return {"text": result["text"], "segments": result["segments"]}
         except Exception as e:
-            logger.error(f"Ошибка при транскрибации: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Ошибка при транскрибации: {str(e)}")
+            logger.error(f"Помилка при транскрибуванні: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Помилка при транскрибуванні: {str(e)}")
         finally:
-            # Удаляем временный файл
+            # Видаляємо тимчасовий файл
             if os.path.exists(temp_file_path):
                 try:
                     os.unlink(temp_file_path)
-                    logger.info(f"Временный файл удален: {temp_file_path}")
+                    logger.info(f"Тимчасовий файл видалено: {temp_file_path}")
                 except Exception as e:
-                    logger.error(f"Ошибка при удалении временного файла: {str(e)}")
+                    logger.error(f"Помилка при видаленні тимчасового файлу: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
