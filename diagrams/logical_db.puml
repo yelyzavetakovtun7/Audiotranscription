@@ -1,0 +1,62 @@
+@startuml Logical Database Model
+
+entity "users" {
+  + id : bigint <<PK>>
+  --
+  username : varchar(255) <<NN>>
+  email : varchar(255) <<NN>> <<UQ>>
+  password_hash : varchar(255) <<NN>>
+  created_at : timestamp <<NN>>
+  updated_at : timestamp <<NN>>
+}
+
+entity "audio_files" {
+  + id : bigint <<PK>>
+  --
+  user_id : bigint <<FK>> <<NN>>
+  file_path : varchar(512) <<NN>>
+  file_size : bigint <<NN>>
+  file_format : varchar(50) <<NN>>
+  duration : float
+  created_at : timestamp <<NN>>
+  updated_at : timestamp <<NN>>
+}
+
+entity "transcriptions" {
+  + id : bigint <<PK>>
+  --
+  user_id : bigint <<FK>> <<NN>>
+  audio_file_id : bigint <<FK>> <<NN>>
+  text : text <<NN>>
+  status : varchar(50) <<NN>>
+  progress : float
+  created_at : timestamp <<NN>>
+  updated_at : timestamp <<NN>>
+}
+
+entity "text_versions" {
+  + id : bigint <<PK>>
+  --
+  transcription_id : bigint <<FK>> <<NN>>
+  text : text <<NN>>
+  version_number : integer <<NN>>
+  created_at : timestamp <<NN>>
+  updated_at : timestamp <<NN>>
+}
+
+entity "exports" {
+  + id : bigint <<PK>>
+  --
+  transcription_id : bigint <<FK>> <<NN>>
+  format : varchar(50) <<NN>>
+  file_path : varchar(512) <<NN>>
+  created_at : timestamp <<NN>>
+}
+
+users ||--o{ audio_files : "user_id"
+users ||--o{ transcriptions : "user_id"
+audio_files ||--|| transcriptions : "audio_file_id"
+transcriptions ||--o{ text_versions : "transcription_id"
+transcriptions ||--o{ exports : "transcription_id"
+
+@enduml 

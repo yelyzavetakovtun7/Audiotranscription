@@ -1,0 +1,56 @@
+@startuml Transcription Process Sequence Diagram
+
+actor User
+participant "Frontend" as FE
+participant "Backend API" as API
+participant "File Validator" as FV
+participant "Audio Processor" as AP
+participant "Whisper Service" as WS
+participant "Progress Manager" as PM
+participant "Database" as DB
+participant "WebSocket" as WSock
+
+== 1. Завантаження та валідація ==
+User -> FE: 1.1 Вибір аудіо файлу
+FE -> API: 1.2 POST /upload
+API -> FV: 1.3 Перевірка формату
+FV --> API: 1.4 Результат валідації
+alt Формат не підтримується
+    API --> FE: 1.5 Повідомлення про помилку
+    FE -> User: 1.6 Показ помилки
+else Формат підтримується
+    API -> AP: 1.7 Обробка аудіо
+    AP --> API: 1.8 Підготовлене аудіо
+end
+
+== 2. Запуск транскрибування ==
+API -> WS: 2.1 Запуск транскрибування
+API -> PM: 2.2 Ініціалізація прогресу
+PM -> WSock: 2.3 Відкриття WebSocket
+WSock --> FE: 2.4 Підключення до WebSocket
+
+== 3. Процес транскрибування ==
+loop Кожні 5 секунд
+    WS -> PM: 3.1 Оновлення прогресу
+    PM -> WSock: 3.2 Відправка прогресу
+    WSock --> FE: 3.3 Оновлення індикатора
+    FE -> User: 3.4 Відображення прогресу
+end
+
+== 4. Завершення та збереження ==
+WS -> API: 4.1 Завершення транскрибування
+API -> DB: 4.2 Збереження результату
+DB --> API: 4.3 Підтвердження збереження
+API -> PM: 4.4 Завершення прогресу
+PM -> WSock: 4.5 Фінальний прогрес
+WSock --> FE: 4.6 Оновлення інтерфейсу
+API --> FE: 4.7 Результат транскрибування
+FE -> User: 4.8 Відображення тексту
+
+== 5. Очищення ресурсів ==
+API -> WS: 5.1 Закриття сесії
+API -> PM: 5.2 Очищення прогресу
+PM -> WSock: 5.3 Закриття з'єднання
+WSock --> FE: 5.4 Відключення WebSocket
+
+@enduml 

@@ -1,0 +1,58 @@
+@startuml VoiseToText Use Case Diagram
+
+actor User
+actor System
+
+rectangle "VoiseToText Application" {
+  usecase "1. Завантажити аудіо файл" as UC1
+  usecase "2. Транскрибувати аудіо" as UC2
+  usecase "3. Переглянути результат" as UC3
+  usecase "4. Редагувати текст" as UC4
+  usecase "5. Відтворити аудіо" as UC5
+  usecase "6. Синхронізувати текст з аудіо" as UC6
+  usecase "7. Зберегти текст" as UC7
+  usecase "8. Експортувати текст" as UC8
+  usecase "9. Переглянути історію" as UC9
+  usecase "10. Відновити попередню версію" as UC10
+}
+
+== Послідовність використання ==
+
+User --> UC1
+UC1 --> UC2 : <<include>>
+UC2 --> UC3 : <<include>>
+UC3 --> UC4 : <<extend>>
+UC3 --> UC5 : <<extend>>
+UC3 --> UC6 : <<extend>>
+UC4 --> UC7 : <<include>>
+UC7 --> UC9 : <<include>>
+UC9 --> UC10 : <<extend>>
+UC4 --> UC8 : <<extend>>
+
+System --> UC2
+System --> UC6
+System --> UC7
+System --> UC9
+
+== Примітки ==
+note right of UC1
+  1. Перевірка формату файлу
+  2. Валідація розміру
+end note
+
+note right of UC2
+  1. Обробка аудіо
+  2. Відображення прогресу
+end note
+
+note right of UC4
+  1. Автоматичне збереження
+  2. Версіонування
+end note
+
+note right of UC8
+  1. Вибір формату
+  2. Збереження файлу
+end note
+
+@enduml 

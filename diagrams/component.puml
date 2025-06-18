@@ -1,0 +1,49 @@
+@startuml VoiseToText Component Diagram
+
+package "Frontend" {
+  component "Web Interface" as UI {
+    component "Audio Uploader" as AU
+    component "Audio Player" as AP
+    component "Text Editor" as TE
+    component "Progress Bar" as PB
+    component "History Viewer" as HV
+    component "Export Manager" as EM
+  }
+}
+
+package "Backend" {
+  component "API Gateway" as API {
+    component "REST Endpoints" as RE
+  }
+  
+  component "Transcription Service" as TS {
+    component "Whisper Engine" as WE
+    component "Audio Processor" as AP
+  }
+  
+  component "Storage Service" as SS {
+    component "File Manager" as FM
+    component "Database Connector" as DC
+  }
+  
+  component "Text Service" as TXT {
+    component "Text Processor" as TP
+    component "Version Control" as VC
+    component "Export Handler" as EH
+  }
+}
+
+== Послідовність взаємодії ==
+
+AU --> RE : 1. Завантаження файлу
+RE --> WE : 2. Транскрибування
+WE --> PB : 3. Оновлення прогресу
+WE --> TE : 4. Відображення тексту
+TE --> TP : 5. Редагування
+TP --> VC : 6. Версіонування
+VC --> DC : 7. Збереження версій
+HV --> DC : 8. Перегляд історії
+TE --> EH : 9. Експорт
+EH --> EM : 10. Завантаження файлу
+
+@enduml 

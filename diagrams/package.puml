@@ -1,0 +1,45 @@
+@startuml VoiseToText Package Diagram
+
+package "Frontend" {
+  [React Components] as RC
+  [Audio Player] as AP
+  [Text Editor] as TE
+  [Progress Indicator] as PI
+  [History Viewer] as HV
+  [Export Manager] as EM
+}
+
+package "Backend" {
+  [FastAPI Server] as FS
+  [Whisper Service] as WS
+  [Audio Processing] as AP
+  [File Management] as FM
+  [Text Processing] as TP
+  [Version Control] as VC
+}
+
+package "Database" {
+  [User Data] as UD
+  [Transcription History] as TH
+  [Text Versions] as TV
+  [Export Formats] as EF
+}
+
+== Послідовність залежностей ==
+
+RC --> FS : 1. Взаємодія з API
+AP --> AP : 2. Обробка аудіо
+TE --> FS : 3. Збереження змін
+PI --> FS : 4. Оновлення прогресу
+HV --> FS : 5. Перегляд історії
+EM --> FS : 6. Експорт даних
+
+FS --> WS : 7. Транскрибування
+FS --> AP : 8. Обробка аудіо
+FS --> FM : 9. Робота з файлами
+FS --> UD : 10. Користувацькі дані
+FS --> TH : 11. Історія транскрибування
+FS --> TV : 12. Версії тексту
+FS --> EF : 13. Формати експорту
+
+@enduml 

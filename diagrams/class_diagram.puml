@@ -1,0 +1,131 @@
+@startuml VoiseToText Class Diagram
+
+' Frontend Classes
+package "Frontend" {
+  class App {
+    +audioFile: File
+    +transcribedText: string
+    +segments: Array<Segment>
+    +currentTime: number
+    +isLoading: boolean
+    +progress: number
+    +handleFileChange()
+    +handleTranscribe()
+    +handleTimeUpdate()
+  }
+
+  class AudioPlayer {
+    -audioRef: Ref
+    +currentTime: number
+    +handleTimeUpdate()
+    +play()
+    +pause()
+  }
+
+  class TextEditor {
+    -text: string
+    -segments: Array<Segment>
+    +handleEdit()
+    +syncWithAudio()
+  }
+
+  class ProgressIndicator {
+    -progress: number
+    -isLoading: boolean
+    +updateProgress()
+    +showLoading()
+  }
+
+  class Segment {
+    +text: string
+    +start: number
+    +end: number
+  }
+}
+
+' Backend Classes
+package "Backend" {
+  class FastAPIApp {
+    +app: FastAPI
+    +setup_routes()
+    +setup_cors()
+  }
+
+  class AudioService {
+    -whisper_model: WhisperModel
+    +validate_audio()
+    +process_audio()
+    +transcribe()
+  }
+
+  class FileService {
+    -upload_dir: string
+    +save_file()
+    +get_file()
+    +delete_file()
+  }
+
+  class ProgressService {
+    -progress_store: Dict
+    +update_progress()
+    +get_progress()
+  }
+
+  class DatabaseService {
+    -connection: Connection
+    +save_transcription()
+    +get_transcription()
+    +save_version()
+    +get_history()
+  }
+
+  class WebSocketManager {
+    -connections: Set
+    +add_connection()
+    +remove_connection()
+    +broadcast_progress()
+  }
+}
+
+' Database Models
+package "Database Models" {
+  class Transcription {
+    +id: int
+    +user_id: int
+    +audio_path: string
+    +text: string
+    +created_at: datetime
+    +save()
+    +get_history()
+  }
+
+  class Version {
+    +id: int
+    +transcription_id: int
+    +text: string
+    +created_at: datetime
+    +save()
+    +restore()
+  }
+}
+
+' Relationships
+App --> AudioPlayer
+App --> TextEditor
+App --> ProgressIndicator
+TextEditor --> Segment
+
+FastAPIApp --> AudioService
+FastAPIApp --> FileService
+FastAPIApp --> ProgressService
+FastAPIApp --> DatabaseService
+FastAPIApp --> WebSocketManager
+
+AudioService --> FileService
+ProgressService --> WebSocketManager
+DatabaseService --> Transcription
+DatabaseService --> Version
+
+Transcription --> Version
+
+@enduml 

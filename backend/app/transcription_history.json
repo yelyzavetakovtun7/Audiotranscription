@@ -1,0 +1,11 @@
+[
+  {
+    "id": "1",
+    "fileName": "test.mp3",
+    "date": "2024-05-06 12:00:00",
+    "transcribedText": "Тестовий текст",
+    "editedText": "Тестовий текст",
+    "segments": [],
+    "editedSegments": []
+  }
+] 

@@ -1,0 +1,87 @@
+@startuml
+skinparam componentStyle uml2
+skinparam component {
+    BackgroundColor<<Frontend>> LightBlue
+    BackgroundColor<<Backend>> LightGreen
+    BackgroundColor<<External>> LightGray
+    BackgroundColor<<API>> LightYellow
+}
+
+package "Voice to Text System" {
+    package "Frontend" {
+        [Web Interface]<<Frontend>> as UI
+        [Audio Recorder]<<Frontend>> as AR
+        [Text Editor]<<Frontend>> as TE
+        [History Viewer]<<Frontend>> as HV
+        
+        package "Frontend APIs" {
+            [Web Audio API]<<API>> as WAA
+            [Canvas API]<<API>> as CA
+            [Draft.js]<<API>> as DJ
+            [Framer Motion]<<API>> as FM
+            [Web Workers]<<API>> as WW
+            [React.memo]<<API>> as RM
+            [useMemo]<<API>> as UM
+        }
+    }
+
+    package "Backend" {
+        [Audio Processor]<<Backend>> as AP
+        [Whisper Service]<<Backend>> as WS
+        [Text Formatter]<<Backend>> as TF
+        [Corpus Generator]<<Backend>> as CG
+        [History Manager]<<Backend>> as HM
+    }
+
+    package "External Services" {
+        [Whisper Model]<<External>> as WM
+        database "PostgreSQL"<<External>> as DB
+    }
+}
+
+' Інтерфейси
+interface "IAudioProcessing" as IAP
+interface "ITextManagement" as ITM
+interface "IHistoryAccess" as IHA
+interface "IWhisperAPI" as IWA
+interface "IDataStorage" as IDS
+
+' Frontend to Backend
+AR )-( IAP
+AP --( IAP
+
+TE )-( ITM
+TF --( ITM
+
+HV )-( IHA
+HM --( IHA
+
+' Backend взаємодії
+AP -- WS
+WS -- WM : "використовує"
+
+WS -- TF
+TF -- CG
+CG -- HM
+
+' Database взаємодії
+AP )-( IDS
+HM )-( IDS
+CG )-( IDS
+DB --( IDS
+
+' UI взаємодії
+UI -- AR
+UI -- TE
+UI -- HV
+
+' Frontend API взаємодії
+AR -- WAA : "використовує"
+UI -- CA : "використовує"
+TE -- DJ : "використовує"
+UI -- FM : "використовує"
+AR -- WW : "використовує"
+UI -- RM : "використовує"
+UI -- UM : "використовує"
+
+@enduml  

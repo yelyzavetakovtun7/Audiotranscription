@@ -1,0 +1,49 @@
+@startuml Conceptual Database Model
+
+entity "Користувач" {
+  + id : number <<PK>>
+  --
+  ім'я : string
+  email : string
+  дата_реєстрації : datetime
+}
+
+entity "Аудіо файл" {
+  + id : number <<PK>>
+  --
+  шлях : string
+  розмір : number
+  формат : string
+  дата_завантаження : datetime
+}
+
+entity "Транскрипція" {
+  + id : number <<PK>>
+  --
+  текст : text
+  статус : string
+  дата_створення : datetime
+}
+
+entity "Версія тексту" {
+  + id : number <<PK>>
+  --
+  текст : text
+  дата_створення : datetime
+}
+
+entity "Експорт" {
+  + id : number <<PK>>
+  --
+  формат : string
+  шлях : string
+  дата_експорту : datetime
+}
+
+Користувач ||--o{ Аудіо файл : "завантажує"
+Користувач ||--o{ Транскрипція : "створює"
+Аудіо файл ||--|| Транскрипція : "трансформується в"
+Транскрипція ||--o{ Версія тексту : "має"
+Транскрипція ||--o{ Експорт : "експортується в"
+
+@enduml 

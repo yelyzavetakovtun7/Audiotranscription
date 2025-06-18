@@ -1,0 +1,46 @@
+@startuml VoiseToText Sequence Diagram
+
+actor User
+participant "Frontend" as FE
+participant "Backend API" as API
+participant "Whisper Service" as WS
+participant "Storage" as ST
+participant "Text Service" as TXT
+
+== 1. Завантаження та транскрибування ==
+User -> FE: 1.1 Завантажує аудіо файл
+FE -> API: 1.2 POST /upload
+API -> ST: 1.3 Зберігає файл
+ST --> API: 1.4 Повертає ID файлу
+API -> WS: 1.5 Запускає транскрибування
+WS --> API: 1.6 Повідомляє про прогрес
+API --> FE: 1.7 Оновлює прогрес
+WS --> API: 1.8 Повертає результат
+API -> ST: 1.9 Зберігає транскрипцію
+API --> FE: 1.10 Повертає результат
+FE -> User: 1.11 Відображає текст
+
+== 2. Редагування тексту ==
+User -> FE: 2.1 Редагує текст
+FE -> API: 2.2 PUT /text/{id}
+API -> TXT: 2.3 Оновлює текст
+TXT -> ST: 2.4 Зберігає версію
+TXT --> API: 2.5 Підтверджує збереження
+API --> FE: 2.6 Оновлює інтерфейс
+
+== 3. Робота з історією ==
+User -> FE: 3.1 Запитує історію
+FE -> API: 3.2 GET /history/{id}
+API -> ST: 3.3 Отримує історію
+ST --> API: 3.4 Повертає історію
+API --> FE: 3.5 Відображає історію
+
+== 4. Експорт тексту ==
+User -> FE: 4.1 Експортує текст
+FE -> API: 4.2 GET /export/{id}
+API -> TXT: 4.3 Форматує текст
+TXT -> ST: 4.4 Зберігає експорт
+TXT --> API: 4.5 Повертає файл
+API --> FE: 4.6 Завантажує файл
+
+@enduml 
