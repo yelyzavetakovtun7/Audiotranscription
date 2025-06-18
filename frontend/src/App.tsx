@@ -384,6 +384,14 @@ function App() {
   const [savedWorks, setSavedWorks] = useState<SavedWork[]>([]);
   const [showHistory, setShowHistory] = useState(true);
 
+  // Мапа для швидких анотацій по гарячих клавішах
+  const annotationHotkeys: Record<string, string> = {
+    '1': 'breathing',
+    '2': 'pause',
+    '3': 'emotion',
+    '4': 'non_verbal',
+  };
+
   // Додаємо useEffect для відновлення роботи при завантаженні
   useEffect(() => {
     const savedWork = localStorage.getItem('restoreWork');
@@ -1200,6 +1208,22 @@ function App() {
       return html;
     }).join('');
   };
+
+  // Додаємо keydown обробник для редактора
+  useEffect(() => {
+    if (!isEditing || !editorRef.current) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && annotationHotkeys[e.key]) {
+        e.preventDefault();
+        handleAnnotationInsert(annotationHotkeys[e.key]);
+      }
+    };
+    const editor = editorRef.current;
+    editor.addEventListener('keydown', handleKeyDown);
+    return () => {
+      editor.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isEditing, editorRef.current]);
 
   return (
     <Router>
