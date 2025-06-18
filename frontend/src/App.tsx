@@ -462,7 +462,7 @@ function App() {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
       if (!file.type.startsWith('audio/')) {
-        setError('Пожалуйста, выберите аудио файл');
+        setError('Будь ласка, виберіть аудіо файл');
         return;
       }
       setAudioFile(file);
@@ -473,7 +473,7 @@ function App() {
 
   const handleTranscribe = async () => {
     if (!audioFile) {
-      setError('Пожалуйста, выберите аудио файл');
+      setError('Будь ласка, виберіть аудіо файл');
       return;
     }
 
@@ -562,7 +562,7 @@ function App() {
       if (error.response?.data?.detail) {
         setError(error.response.data.detail);
       } else {
-        setError('Произошла ошибка при транскрибации');
+        setError('Виникла помилка при транскрибуванні');
       }
       console.error('Error transcribing audio:', error);
     } finally {
@@ -957,7 +957,7 @@ function App() {
       <Routes>
         <Route path="/" element={
           <Container>
-            <h1>Аудио в текст</h1>
+            <h1>Аудіо в текст</h1>
 
             {!showHistory && (
               <BackButton onClick={handleBackToHistory}>
@@ -967,7 +967,7 @@ function App() {
 
             <FileInput type="file" accept="audio/*" onChange={handleFileChange} />
             <Button onClick={handleTranscribe} disabled={isLoading || !audioFile}>
-              {isLoading ? 'Транскрибация...' : 'Транскрибировать'}
+              {isLoading ? 'Транскрибування...' : 'Транскрибувати'}
             </Button>
             
             {error && <ErrorMessage>{error}</ErrorMessage>}
@@ -975,7 +975,7 @@ function App() {
             {isLoading && (
               <LoadingMessage>
                 <Spinner />
-                Идет обработка аудио... {getElapsedTime()} ({progress}%)
+                Йде обробка аудіо... {getElapsedTime()} ({progress}%)
               </LoadingMessage>
             )}
             
@@ -1003,83 +1003,88 @@ function App() {
               </HistoryContainer>
             )}
 
-            {transcribedText && !showHistory && (
-              <>
-                <AnnotationButtonGroup>
-                  <AnnotationButton
-                    color="#8884d8"
-                    onClick={() => handleAnnotationInsert('breathing')}
-                    disabled={!isEditing}
-                  >
-                    🫁 Дихання
-                  </AnnotationButton>
-                  <AnnotationButton
-                    color="#ff8042"
-                    onClick={() => handleAnnotationInsert('pause')}
-                    disabled={!isEditing}
-                  >
-                    ⏸️ Пауза
-                  </AnnotationButton>
-                  <AnnotationButton
-                    color="#ffc658"
-                    onClick={() => handleAnnotationInsert('emotion')}
-                    disabled={!isEditing}
-                  >
-                    😊 Емоція
-                  </AnnotationButton>
-                  <AnnotationButton
-                    color="#82ca9d"
-                    onClick={() => handleAnnotationInsert('non_verbal')}
-                    disabled={!isEditing}
-                  >
-                    🔊 Невербальний звук
-                  </AnnotationButton>
-                </AnnotationButtonGroup>
-
-                <ButtonGroup>
-                  {!isEditing ? (
-                    <>
-                      <Button onClick={handleEdit}>Редагувати</Button>
-                      <Button onClick={saveToHistory}>Зберегти в історію</Button>
-                      <DownloadButton onClick={handleDownloadText}>Скачати текст</DownloadButton>
-                      <CorpusButton onClick={handleDownloadCorpus}>Скачати з розміткою</CorpusButton>
-                    </>
-                  ) : (
-                    <>
-                      <Button onClick={handleSave}>Зберегти</Button>
-                      <Button onClick={handleReset}>Скасувати</Button>
-                    </>
-                  )}
-                </ButtonGroup>
-              </>
+            {/* Кнопки керування над текстом */}
+            {!showHistory && (
+              <ButtonGroup>
+                {!isEditing ? (
+                  <>
+                    <Button onClick={handleEdit}>Редагувати</Button>
+                    <Button onClick={saveToHistory}>Зберегти в історію</Button>
+                    <DownloadButton onClick={handleDownloadText}>Скачати текст</DownloadButton>
+                    <CorpusButton onClick={handleDownloadCorpus}>Скачати з розміткою</CorpusButton>
+                  </>
+                ) : (
+                  <>
+                    <Button onClick={handleSave}>Зберегти</Button>
+                    <Button onClick={handleReset}>Скасувати</Button>
+                  </>
+                )}
+              </ButtonGroup>
             )}
 
-            {isEditing ? (
-              <TextEditor
-                ref={editorRef}
-                contentEditable
-                onInput={handleEditorChange}
-                suppressContentEditableWarning
-                dangerouslySetInnerHTML={{ __html: editedText }}
-              />
-            ) : (
-              <TextEditor>
-                {editedSegments.map((segment, index) => {
-                  const shouldHighlight = currentTime >= segment.start && currentTime <= segment.end + 3;
-                  return (
-                    <HighlightedText
-                      key={segment.id || index}
-                      $isActive={shouldHighlight}
-                      $isEdited={segment.isEdited}
-                      title={`Впевненість: ${(segment.confidence * 100).toFixed(1)}%`}
-                      onClick={() => handleSegmentClick(segment.start)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <span dangerouslySetInnerHTML={{ __html: segment.htmlContent || segment.text }} />
-                    </HighlightedText>
-                  );
-                })}
-              </TextEditor>
+            {/* Відображення тексту тільки якщо не showHistory */}
+            {!showHistory && (
+              isEditing ? (
+                <TextEditor
+                  ref={editorRef}
+                  contentEditable
+                  onInput={handleEditorChange}
+                  suppressContentEditableWarning
+                  dangerouslySetInnerHTML={{ __html: editedText }}
+                />
+              ) : (
+                <TextEditor>
+                  {editedSegments.map((segment, index) => {
+                    const shouldHighlight = currentTime >= segment.start && currentTime <= segment.end + 3;
+                    return (
+                      <HighlightedText
+                        key={segment.id || index}
+                        $isActive={shouldHighlight}
+                        $isEdited={segment.isEdited}
+                        title={`Впевненість: ${(segment.confidence * 100).toFixed(1)}%`}
+                        onClick={() => handleSegmentClick(segment.start)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <span dangerouslySetInnerHTML={{ __html: segment.htmlContent || segment.text }} />
+                      </HighlightedText>
+                    );
+                  })}
+                </TextEditor>
+              )
+            )}
+
+            {/* Блок кнопок анотацій під текстом */}
+            {!showHistory && (
+              <AnnotationButtonGroup>
+                <AnnotationButton
+                  color="#8884d8"
+                  onClick={() => handleAnnotationInsert('breathing')}
+                  disabled={!isEditing}
+                >
+                  🫁 Дихання
+                </AnnotationButton>
+                <AnnotationButton
+                  color="#ff8042"
+                  onClick={() => handleAnnotationInsert('pause')}
+                  disabled={!isEditing}
+                >
+                  ⏸️ Пауза
+                </AnnotationButton>
+                <AnnotationButton
+                  color="#ffc658"
+                  onClick={() => handleAnnotationInsert('emotion')}
+                  disabled={!isEditing}
+                >
+                  😊 Емоція
+                </AnnotationButton>
+                <AnnotationButton
+                  color="#82ca9d"
+                  onClick={() => handleAnnotationInsert('non_verbal')}
+                  disabled={!isEditing}
+                >
+                  🔊 Невербальний звук
+                </AnnotationButton>
+              </AnnotationButtonGroup>
             )}
           </Container>
         } />
