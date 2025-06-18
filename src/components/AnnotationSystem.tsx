@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { AnnotationType, Annotation } from '../types/annotations';
 import { AnnotationTimeline } from './AnnotationTimeline';
 import { AnnotationLayerManager } from './AnnotationLayerManager';
@@ -11,6 +11,9 @@ interface AnnotationSystemProps {
     currentTime: number;
     onTimeUpdate: (time: number) => void;
     onAnnotationInsert: (text: string) => void;
+    annotations: Annotation[];
+    onAnnotationsChange: (newAnnotations: Annotation[], annotationText?: string) => void;
+    onUndo: () => void;
 }
 
 const annotationService = new AnnotationService();
@@ -19,9 +22,11 @@ export const AnnotationSystem: React.FC<AnnotationSystemProps> = ({
     audioDuration,
     currentTime,
     onTimeUpdate,
-    onAnnotationInsert
+    onAnnotationInsert,
+    annotations,
+    onAnnotationsChange,
+    onUndo
 }) => {
-    const [annotations, setAnnotations] = useState<Annotation[]>([]);
     const [selectedLayers, setSelectedLayers] = useState<AnnotationType[]>(
         Object.values(AnnotationType)
     );
@@ -40,11 +45,10 @@ export const AnnotationSystem: React.FC<AnnotationSystemProps> = ({
     };
 
     const handleAnnotationSave = (editedAnnotation: Annotation) => {
-        setAnnotations(prev =>
-            prev.map(ann =>
-                ann.id === editedAnnotation.id ? editedAnnotation : ann
-            )
+        const updated = annotations.map(ann =>
+            ann.id === editedAnnotation.id ? editedAnnotation : ann
         );
+        onAnnotationsChange(updated);
         setSelectedAnnotation(null);
     };
 
@@ -72,16 +76,17 @@ export const AnnotationSystem: React.FC<AnnotationSystemProps> = ({
             currentTime + 1, // За замовчуванням тривалість 1 секунда
             {}
         );
-        
-        setAnnotations(prev => [...prev, newAnnotation]);
+        const updated = [...annotations, newAnnotation];
+        onAnnotationsChange(updated, getAnnotationText(type));
         onAnnotationInsert(getAnnotationText(type));
-    }, [currentTime, onAnnotationInsert]);
+    }, [annotations, currentTime, onAnnotationsChange, onAnnotationInsert]);
 
     return (
         <div className="annotation-system">
             <div className="main-content">
                 <AnnotationQuickButtons
                     onAnnotationAdd={handleQuickAnnotationAdd}
+                    onUndo={onUndo}
                     disabled={currentTime < 0}
                 />
                 <div className="timeline-container">

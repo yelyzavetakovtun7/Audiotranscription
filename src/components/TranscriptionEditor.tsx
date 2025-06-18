@@ -6,17 +6,56 @@ interface TranscriptionEditorProps {
     audioUrl: string;
 }
 
+interface Annotation {
+    id?: string;
+    type: string;
+    [key: string]: any;
+}
+
 export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
     audioUrl
 }) => {
     const [text, setText] = useState<string>('');
+    const [annotations, setAnnotations] = useState<Annotation[]>([]);
+    const [history, setHistory] = useState<{ text: string; annotations: Annotation[] }[]>([]);
     const [cursorPosition, setCursorPosition] = useState<number>(0);
     const [currentTime, setCurrentTime] = useState<number>(0);
     const [audioDuration, setAudioDuration] = useState<number>(0);
 
+    const pushToHistory = useCallback((newText: string, newAnnotations: Annotation[]) => {
+        setHistory(prev => {
+            const updated = [...prev, { text: newText, annotations: newAnnotations }];
+            return updated.length > 5 ? updated.slice(updated.length - 5) : updated;
+        });
+    }, []);
+
     const handleTextChange = (newText: string) => {
         setText(newText);
+        pushToHistory(newText, annotations);
     };
+
+    const handleAnnotationsChange = useCallback((newAnnotations: Annotation[], annotationText?: string) => {
+        setAnnotations(prev => {
+            pushToHistory(text, newAnnotations);
+            // Якщо annotationText передано, вставляємо його у текст
+            if (annotationText) {
+                const before = text.slice(0, cursorPosition);
+                const after = text.slice(cursorPosition);
+                setText(before + annotationText + after);
+            }
+            return newAnnotations;
+        });
+    }, [text, cursorPosition, pushToHistory]);
+
+    const handleUndo = useCallback(() => {
+        setHistory(prev => {
+            if (prev.length === 0) return prev;
+            const last = prev[prev.length - 1];
+            setText(last.text);
+            setAnnotations(last.annotations);
+            return prev.slice(0, -1);
+        });
+    }, []);
 
     const handleCursorPositionChange = (position: number) => {
         setCursorPosition(position);
@@ -30,9 +69,11 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
         setText(prev => {
             const before = prev.slice(0, cursorPosition);
             const after = prev.slice(cursorPosition);
-            return before + annotationText + after;
+            const newText = before + annotationText + after;
+            pushToHistory(newText, annotations);
+            return newText;
         });
-    }, [cursorPosition]);
+    }, [cursorPosition, pushToHistory, annotations]);
 
     const handleAudioLoad = (e: React.SyntheticEvent<HTMLAudioElement>) => {
         setAudioDuration(e.currentTarget.duration);
@@ -68,6 +109,9 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
                         currentTime={currentTime}
                         onTimeUpdate={handleTimeUpdate}
                         onAnnotationInsert={handleAnnotationInsert}
+                        annotations={annotations}
+                        onAnnotationsChange={handleAnnotationsChange}
+                        onUndo={handleUndo}
                     />
                 </div>
             </div>

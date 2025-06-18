@@ -1,9 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AnnotationType } from '../types/annotations';
 
 interface AnnotationQuickButtonsProps {
     onAnnotationAdd: (type: AnnotationType) => void;
+    onUndo?: () => void;
     disabled?: boolean;
+}
+
+interface Action {
+    type: 'annotation';
+    annotationType: AnnotationType;
 }
 
 const BUTTON_CONFIG = {
@@ -27,21 +33,56 @@ const BUTTON_CONFIG = {
 
 export const AnnotationQuickButtons: React.FC<AnnotationQuickButtonsProps> = ({
     onAnnotationAdd,
+    onUndo,
     disabled = false
 }) => {
+    const [actionHistory, setActionHistory] = useState<Action[]>([]);
+
+    const handleAnnotationAdd = (type: AnnotationType) => {
+        onAnnotationAdd(type);
+        setActionHistory(prev => [...prev, { type: 'annotation', annotationType: type }]);
+    };
+
+    const handleUndo = () => {
+        if (actionHistory.length > 0 && onUndo) {
+            onUndo();
+            setActionHistory(prev => prev.slice(0, -1));
+        }
+    };
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !disabled) {
+                e.preventDefault();
+                handleUndo();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [actionHistory, disabled]);
+
     return (
         <div className="annotation-quick-buttons-container">
             <div className="annotation-quick-buttons">
                 {Object.entries(BUTTON_CONFIG).map(([type, config]) => (
                     <button
                         key={type}
-                        onClick={() => onAnnotationAdd(type as AnnotationType)}
+                        onClick={() => handleAnnotationAdd(type as AnnotationType)}
                         disabled={disabled}
                         style={{ backgroundColor: config.color }}
                     >
                         {config.label}
                     </button>
                 ))}
+                <button
+                    onClick={handleUndo}
+                    disabled={disabled || actionHistory.length === 0}
+                    style={{ backgroundColor: '#666' }}
+                    title="Відмінити останню дію (Ctrl+Z)"
+                >
+                    ↩️ Відмінити
+                </button>
             </div>
 
             <style jsx>{`

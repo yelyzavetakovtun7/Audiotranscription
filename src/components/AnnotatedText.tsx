@@ -41,6 +41,34 @@ export const AnnotatedText: React.FC<AnnotatedTextProps> = ({
                 }
             }, 0);
         }
+        if (e.ctrlKey && e.key === 'Backspace') {
+            const cursor = e.currentTarget.selectionStart;
+            // Регулярка для пошуку анотації у форматі [ТЕКСТ]
+            const annotationRegex = /\[[^\]]+\]/g;
+            let match;
+            let found = false;
+            while ((match = annotationRegex.exec(text)) !== null) {
+                const start = match.index;
+                const end = start + match[0].length;
+                if (cursor > start && cursor <= end) {
+                    // Видаляємо анотацію
+                    const newText = text.slice(0, start) + text.slice(end);
+                    onTextChange(newText);
+                    // Встановлюємо курсор на місце видаленої анотації
+                    setTimeout(() => {
+                        if (textareaRef.current) {
+                            textareaRef.current.selectionStart = start;
+                            textareaRef.current.selectionEnd = start;
+                        }
+                    }, 0);
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                e.preventDefault();
+            }
+        }
     };
 
     const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
